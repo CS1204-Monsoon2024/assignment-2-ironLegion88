@@ -1,124 +1,156 @@
+// HashTable.cpp
 #include <iostream>
 #include <vector>
 #include <cmath>
-
-// Helper function to check if a number is prime
-bool isPrime(int n) {
-    if (n <= 1) return false;
-    if (n <= 3) return true;
-    if (n % 2 == 0 || n % 3 == 0) return false;
-    for (int i = 5; i * i <= n; i += 6) {
-        if (n % i == 0 || n % (i + 2) == 0) return false;
-    }
-    return true;
-}
-
-// Helper function to find the next prime number greater than or equal to 'n'
-int nextPrime(int n) {
-    while (!isPrime(n)) ++n;
-    return n;
-}
+using namespace std;
 
 class HashTable {
 private:
-    std::vector<int> table;  // Stores the values in the hash table
-    int currentSize;          // Current number of elements in the table
-    int capacity;             // Capacity (size) of the hash table
-    const double loadFactorThreshold = 0.8;  // Threshold to trigger resizing
+    vector<int> table;   // Hash table storage
+    vector<bool> tombstone;  // Tracks deleted slots (tombstone markers)
+    int currentSize;      // Number of elements in the table
+    int capacity;         // Current capacity of the table
+    static constexpr double LOAD_FACTOR = 0.8;  // Load factor threshold for resizing
 
-    // Hash function: h(k) = k mod m
+    // Helper function to find the next prime number >= 'num'
+    int nextPrime(int num) {
+        while (!isPrime(num)) ++num;
+        return num;
+    }
+
+    // Helper function to check if a number is prime
+    bool isPrime(int num) {
+        if (num < 2) return false;
+        for (int i = 2; i <= sqrt(num); ++i) {
+            if (num % i == 0) return false;
+        }
+        return true;
+    }
+
+    // Hash function: h(k) = k % m
     int hash(int key) const {
         return key % capacity;
     }
 
-    // Resize the table to a new prime size and rehash existing elements
-    void resize() {
-        int newCapacity = nextPrime(2 * capacity);  // Get next prime number
-        std::vector<int> newTable(newCapacity, -1);  // New empty table
-        for (int i = 0; i < capacity; ++i) {
-            if (table[i] != -1) {
-                rehash(newTable, table[i], newCapacity);  // Rehash elements
+    // Function to rehash all elements when resizing
+    void rehash() {
+        int oldCapacity = capacity;
+        capacity = nextPrime(2 * oldCapacity);  // New capacity must be prime
+        vector<int> oldTable = table;
+        vector<bool> oldTombstone = tombstone;
+
+        table.assign(capacity, -1);  // Reset the new table
+        tombstone.assign(capacity, false);
+        currentSize = 0;
+
+        for (int i = 0; i < oldCapacity; ++i) {
+            if (oldTable[i] != -1 && !oldTombstone[i]) {
+                insert(oldTable[i]);  // Reinsert elements into the new table
             }
         }
-        table = std::move(newTable);  // Update table to new resized table
-        capacity = newCapacity;
-    }
-
-    // Helper function to rehash a key into the new table during resizing
-    void rehash(std::vector<int>& newTable, int key, int newCapacity) {
-        int index = key % newCapacity;
-        int i = 1;
-        while (newTable[index] != -1) {
-            index = (index + i * i) % newCapacity;
-            ++i;
-        }
-        newTable[index] = key;
     }
 
 public:
-    // Constructor to initialize the hash table with a given size
-    HashTable(int size) {
+    // Constructor to initialize the hash table
+    HashTable(int size = 7) {
         capacity = nextPrime(size);  // Ensure initial size is prime
-        table.resize(capacity, -1);  // Initialize with -1 indicating empty slots
+        table.assign(capacity, -1);
+        tombstone.assign(capacity, false);
         currentSize = 0;
     }
 
-    // Insert a key into the hash table
+    // Insert function with quadratic probing
     void insert(int key) {
-        if (search(key) != -1) {
-            std::cout << "Duplicate key insertion is not allowed" << std::endl;
-            return;
-        }
-        if ((double)currentSize / capacity >= loadFactorThreshold) {
-            resize();  // Resize if load factor exceeds threshold
-        }
+        int index = hash(key);
+        int i = 0;
 
-        int index = hash(key);  // Get the initial hash index
-        int i = 1;
-        while (table[index] != -1) {  // Quadratic probing to handle collisions
-            index = (index + i * i) % capacity;
-            if (i > capacity) {
-                std::cout << "Max probing limit reached!" << std::endl;
+        // Quadratic probing to find an open slot
+        while (true) {
+            int newIndex = (index + i * i) % capacity;
+
+            if (table[newIndex] == -1) {
+                // Insert key and update size
+                table[newIndex] = key;
+                tombstone[newIndex] = false;
+                ++currentSize;
+
+                // Check if rehashing is needed
+                if ((double)currentSize / capacity >= LOAD_FACTOR) {
+                    rehash();
+                }
+                return;
+            } else if (table[newIndex] == key) {
+                cout << "Duplicate key insertion is not allowed" << endl;
                 return;
             }
             ++i;
+
+            if (i == capacity) {
+                cout << "Max probing limit reached!" << endl;
+                return;
+            }
         }
-        table[index] = key;
-        ++currentSize;
     }
 
-    // Search for a key and return its index, or -1 if not found
+    // Remove function with quadratic probing
+    void remove(int key) {
+        int index = hash(key);
+        int i = 0;
+
+        // Quadratic probing to find the key
+        while (true) {
+            int newIndex = (index + i * i) % capacity;
+
+            if (table[newIndex] == key) {
+                // Mark as tombstone
+                table[newIndex] = -1;
+                tombstone[newIndex] = true;
+                --currentSize;
+                return;
+            } else if (table[newIndex] == -1 && !tombstone[newIndex]) {
+                cout << "Element not found" << endl;
+                return;
+            }
+            ++i;
+
+            if (i == capacity) {
+                cout << "Element not found" << endl;
+                return;
+            }
+        }
+    }
+
+    // Search function with quadratic probing
     int search(int key) const {
         int index = hash(key);
-        int i = 1;
-        while (table[index] != -1) {
-            if (table[index] == key) return index;
-            index = (index + i * i) % capacity;
-            if (i > capacity) break;
+        int i = 0;
+
+        // Quadratic probing to search for the key
+        while (true) {
+            int newIndex = (index + i * i) % capacity;
+
+            if (table[newIndex] == key) {
+                return newIndex;  // Return the index of the key
+            } else if (table[newIndex] == -1 && !tombstone[newIndex]) {
+                return -1;  // Key not found
+            }
             ++i;
+
+            if (i == capacity) {
+                return -1;  // Key not found
+            }
         }
-        return -1;
     }
 
-    // Remove a key from the hash table
-    void remove(int key) {
-        int index = search(key);
-        if (index == -1) {
-            std::cout << "Element not found" << std::endl;
-            return;
-        }
-        table[index] = -1;  // Mark the slot as empty
-        --currentSize;
-    }
-
-    // Print the current state of the hash table
+    // Print the entire hash table
     void printTable() const {
         for (int i = 0; i < capacity; ++i) {
-            if (table[i] == -1)
-                std::cout << "- ";
-            else
-                std::cout << table[i] << " ";
+            if (table[i] == -1) {
+                cout << "- ";
+            } else {
+                cout << table[i] << " ";
+            }
         }
-        std::cout << std::endl;
+        cout << endl;
     }
 };
