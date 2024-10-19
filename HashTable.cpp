@@ -1,4 +1,3 @@
-// HashTable.cpp
 #include <iostream>
 #include <vector>
 #include <cmath>
@@ -6,11 +5,12 @@ using namespace std;
 
 class HashTable {
 private:
-    vector<int> table;   // Hash table storage
-    vector<bool> tombstone;  // Tracks deleted slots (tombstone markers)
-    int currentSize;      // Number of elements in the table
-    int capacity;         // Current capacity of the table
-    static constexpr double LOAD_FACTOR = 0.8;  // Load factor threshold for resizing
+    vector<int> table;    // Hash table storage
+    int currentSize;       // Number of elements in the table
+    int capacity;          // Current capacity of the table
+    static constexpr double LOAD_FACTOR = 0.8;  // Load factor threshold
+    const int EMPTY = -1;  // Represents empty slots
+    const int TOMBSTONE = -2;  // Represents deleted slots
 
     // Helper function to find the next prime number >= 'num'
     int nextPrime(int num) {
@@ -35,17 +35,15 @@ private:
     // Function to rehash all elements when resizing
     void rehash() {
         int oldCapacity = capacity;
-        capacity = nextPrime(2 * oldCapacity);  // New capacity must be prime
+        capacity = nextPrime(2 * oldCapacity);  // New prime capacity
         vector<int> oldTable = table;
-        vector<bool> oldTombstone = tombstone;
+        table.assign(capacity, EMPTY);  // Reset the new table with EMPTY
+        currentSize = 0;  // Reset size before reinserting elements
 
-        table.assign(capacity, -1);  // Reset the new table
-        tombstone.assign(capacity, false);
-        currentSize = 0;
-
-        for (int i = 0; i < oldCapacity; ++i) {
-            if (oldTable[i] != -1 && !oldTombstone[i]) {
-                insert(oldTable[i]);  // Reinsert elements into the new table
+        // Reinsert all valid elements from the old table into the new table
+        for (int key : oldTable) {
+            if (key != EMPTY && key != TOMBSTONE) {
+                insert(key);  // Use insert to apply new capacity's hash
             }
         }
     }
@@ -54,8 +52,7 @@ public:
     // Constructor to initialize the hash table
     HashTable(int size = 7) {
         capacity = nextPrime(size);  // Ensure initial size is prime
-        table.assign(capacity, -1);
-        tombstone.assign(capacity, false);
+        table.assign(capacity, EMPTY);
         currentSize = 0;
     }
 
@@ -63,32 +60,41 @@ public:
     void insert(int key) {
         int index = hash(key);
         int i = 0;
+        int tombstoneIndex = -1;  // Track a possible tombstone slot
 
-        // Quadratic probing to find an open slot
-        while (true) {
-            int newIndex = (index + i * i) % capacity;
+        // Quadratic probing to find an open slot or tombstone
+        while (table[(index + i * i) % capacity] != EMPTY) {
+            int currentIndex = (index + i * i) % capacity;
 
-            if (table[newIndex] == -1) {
-                // Insert key and update size
-                table[newIndex] = key;
-                tombstone[newIndex] = false;
-                ++currentSize;
-
-                // Check if rehashing is needed
-                if ((double)currentSize / capacity >= LOAD_FACTOR) {
-                    rehash();
-                }
-                return;
-            } else if (table[newIndex] == key) {
+            if (table[currentIndex] == key) {
                 cout << "Duplicate key insertion is not allowed" << endl;
                 return;
             }
-            ++i;
 
+            // If we encounter a tombstone, store its position for reuse
+            if (table[currentIndex] == TOMBSTONE && tombstoneIndex == -1) {
+                tombstoneIndex = currentIndex;
+            }
+
+            ++i;
             if (i == capacity) {
                 cout << "Max probing limit reached!" << endl;
                 return;
             }
+        }
+
+        // Insert key in either the found tombstone slot or the empty slot
+        if (tombstoneIndex != -1) {
+            table[tombstoneIndex] = key;
+        } else {
+            table[(index + i * i) % capacity] = key;
+        }
+
+        ++currentSize;
+
+        // Check if rehashing is needed
+        if ((double)currentSize / capacity >= LOAD_FACTOR) {
+            rehash();
         }
     }
 
@@ -98,26 +104,21 @@ public:
         int i = 0;
 
         // Quadratic probing to find the key
-        while (true) {
-            int newIndex = (index + i * i) % capacity;
-
-            if (table[newIndex] == key) {
-                // Mark as tombstone
-                table[newIndex] = -1;
-                tombstone[newIndex] = true;
-                --currentSize;
-                return;
-            } else if (table[newIndex] == -1 && !tombstone[newIndex]) {
+        while (table[(index + i * i) % capacity] != key) {
+            if (table[(index + i * i) % capacity] == EMPTY) {
                 cout << "Element not found" << endl;
                 return;
             }
             ++i;
-
             if (i == capacity) {
                 cout << "Element not found" << endl;
                 return;
             }
         }
+
+        // Mark slot as tombstone
+        table[(index + i * i) % capacity] = TOMBSTONE;
+        --currentSize;
     }
 
     // Search function with quadratic probing
@@ -126,27 +127,25 @@ public:
         int i = 0;
 
         // Quadratic probing to search for the key
-        while (true) {
-            int newIndex = (index + i * i) % capacity;
-
-            if (table[newIndex] == key) {
-                return newIndex;  // Return the index of the key
-            } else if (table[newIndex] == -1 && !tombstone[newIndex]) {
+        while (table[(index + i * i) % capacity] != key) {
+            if (table[(index + i * i) % capacity] == EMPTY) {
                 return -1;  // Key not found
             }
             ++i;
-
             if (i == capacity) {
                 return -1;  // Key not found
             }
         }
+        return (index + i * i) % capacity;  // Return the index of the key
     }
 
     // Print the entire hash table
     void printTable() const {
         for (int i = 0; i < capacity; ++i) {
-            if (table[i] == -1) {
+            if (table[i] == EMPTY) {
                 cout << "- ";
+            } else if (table[i] == TOMBSTONE) {
+                cout << "x ";  // Mark tombstone for clarity
             } else {
                 cout << table[i] << " ";
             }
@@ -154,3 +153,21 @@ public:
         cout << endl;
     }
 };
+
+int main() {
+    HashTable ht(5);
+
+    ht.insert(1);
+    ht.insert(4);
+    ht.insert(17);
+    ht.insert(22);  // Causes rehashing
+    ht.printTable();
+
+    ht.remove(4);
+    ht.printTable();
+
+    cout << "Index of 17: " << ht.search(17) << endl;
+    cout << "Index of 4: " << ht.search(4) << endl;  // Should return -1
+
+    return 0;
+}
