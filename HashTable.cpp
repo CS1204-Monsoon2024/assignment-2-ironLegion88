@@ -153,21 +153,3 @@ public:
         cout << endl;
     }
 };
-
-int main() {
-    HashTable ht(5);
-
-    ht.insert(1);
-    ht.insert(4);
-    ht.insert(17);
-    ht.insert(22);  // Causes rehashing
-    ht.printTable();
-
-    ht.remove(4);
-    ht.printTable();
-
-    cout << "Index of 17: " << ht.search(17) << endl;
-    cout << "Index of 4: " << ht.search(4) << endl;  // Should return -1
-
-    return 0;
-}
