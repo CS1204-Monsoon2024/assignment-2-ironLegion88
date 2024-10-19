@@ -7,9 +7,10 @@ using namespace std;
 class HashTable {
 private:
     vector<int> table;   // Hash table storage
+    vector<bool> tombstone;  // Tracks deleted slots (tombstone markers)
     int currentSize;      // Number of elements in the table
     int capacity;         // Current capacity of the table
-    static constexpr double LOAD_FACTOR = 0.8;  // Static constant to avoid const-related issues
+    static constexpr double LOAD_FACTOR = 0.8;  // Load factor threshold for resizing
 
     // Helper function to find the next prime number >= 'num'
     int nextPrime(int num) {
@@ -34,14 +35,17 @@ private:
     // Function to rehash all elements when resizing
     void rehash() {
         int oldCapacity = capacity;
-        capacity = nextPrime(2 * oldCapacity);
+        capacity = nextPrime(2 * oldCapacity);  // New capacity must be prime
         vector<int> oldTable = table;
+        vector<bool> oldTombstone = tombstone;
+
         table.assign(capacity, -1);  // Reset the new table
+        tombstone.assign(capacity, false);
         currentSize = 0;
 
-        for (int key : oldTable) {
-            if (key != -1) {
-                insert(key);  // Reinsert elements into the new table
+        for (int i = 0; i < oldCapacity; ++i) {
+            if (oldTable[i] != -1 && !oldTombstone[i]) {
+                insert(oldTable[i]);  // Reinsert elements into the new table
             }
         }
     }
@@ -51,6 +55,7 @@ public:
     HashTable(int size = 7) {
         capacity = nextPrime(size);  // Ensure initial size is prime
         table.assign(capacity, -1);
+        tombstone.assign(capacity, false);
         currentSize = 0;
     }
 
@@ -60,25 +65,30 @@ public:
         int i = 0;
 
         // Quadratic probing to find an open slot
-        while (table[(index + i * i) % capacity] != -1) {
-            if (table[(index + i * i) % capacity] == key) {
+        while (true) {
+            int newIndex = (index + i * i) % capacity;
+
+            if (table[newIndex] == -1) {
+                // Insert key and update size
+                table[newIndex] = key;
+                tombstone[newIndex] = false;
+                ++currentSize;
+
+                // Check if rehashing is needed
+                if ((double)currentSize / capacity >= LOAD_FACTOR) {
+                    rehash();
+                }
+                return;
+            } else if (table[newIndex] == key) {
                 cout << "Duplicate key insertion is not allowed" << endl;
                 return;
             }
             ++i;
+
             if (i == capacity) {
                 cout << "Max probing limit reached!" << endl;
                 return;
             }
-        }
-
-        // Insert key and update size
-        table[(index + i * i) % capacity] = key;
-        ++currentSize;
-
-        // Check if rehashing is needed
-        if ((double)currentSize / capacity >= LOAD_FACTOR) {
-            rehash();
         }
     }
 
@@ -88,21 +98,26 @@ public:
         int i = 0;
 
         // Quadratic probing to find the key
-        while (table[(index + i * i) % capacity] != key) {
-            if (table[(index + i * i) % capacity] == -1) {
+        while (true) {
+            int newIndex = (index + i * i) % capacity;
+
+            if (table[newIndex] == key) {
+                // Mark as tombstone
+                table[newIndex] = -1;
+                tombstone[newIndex] = true;
+                --currentSize;
+                return;
+            } else if (table[newIndex] == -1 && !tombstone[newIndex]) {
                 cout << "Element not found" << endl;
                 return;
             }
             ++i;
+
             if (i == capacity) {
                 cout << "Element not found" << endl;
                 return;
             }
         }
-
-        // Remove key and mark slot as -1
-        table[(index + i * i) % capacity] = -1;
-        --currentSize;
     }
 
     // Search function with quadratic probing
@@ -111,16 +126,20 @@ public:
         int i = 0;
 
         // Quadratic probing to search for the key
-        while (table[(index + i * i) % capacity] != key) {
-            if (table[(index + i * i) % capacity] == -1) {
+        while (true) {
+            int newIndex = (index + i * i) % capacity;
+
+            if (table[newIndex] == key) {
+                return newIndex;  // Return the index of the key
+            } else if (table[newIndex] == -1 && !tombstone[newIndex]) {
                 return -1;  // Key not found
             }
             ++i;
+
             if (i == capacity) {
                 return -1;  // Key not found
             }
         }
-        return (index + i * i) % capacity;  // Return the index of the key
     }
 
     // Print the entire hash table
