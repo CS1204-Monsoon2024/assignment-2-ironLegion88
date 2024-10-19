@@ -26,7 +26,7 @@ private:
     vector<bool> occupied;  // Track if a position was ever occupied
     int size;               // Current size of the table
     int count;              // Current number of elements in the table
-    const double loadFactorThreshold = 0.8;
+    double loadFactorThreshold = 0.8;
 
     // Hash function: key % size
     int hash(int key) const {
@@ -67,6 +67,10 @@ public:
         occupied.resize(size, false);
         count = 0;
     }
+
+    // Deleted copy constructor and assignment operator to avoid misuse
+    HashTable(const HashTable&) = delete;
+    HashTable& operator=(const HashTable&) = delete;
 
     // Insert a key into the hash table
     void insert(int key) {
