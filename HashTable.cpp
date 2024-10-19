@@ -21,10 +21,10 @@ int nextPrime(int n) {
 
 class HashTable {
 private:
-    std::vector<int> table;
-    int currentSize;
-    int capacity;
-    double loadFactorThreshold = 0.8;  // Changed from const to non-const
+    std::vector<int> table;  // Stores the values in the hash table
+    int currentSize;          // Current number of elements in the table
+    int capacity;             // Capacity (size) of the hash table
+    const double loadFactorThreshold = 0.8;  // Threshold to trigger resizing
 
     // Hash function: h(k) = k mod m
     int hash(int key) const {
@@ -33,20 +33,18 @@ private:
 
     // Resize the table to a new prime size and rehash existing elements
     void resize() {
-        int newCapacity = nextPrime(2 * capacity);
-        std::vector<int> newTable(newCapacity, -1);
-
+        int newCapacity = nextPrime(2 * capacity);  // Get next prime number
+        std::vector<int> newTable(newCapacity, -1);  // New empty table
         for (int i = 0; i < capacity; ++i) {
             if (table[i] != -1) {
-                rehash(newTable, table[i], newCapacity);
+                rehash(newTable, table[i], newCapacity);  // Rehash elements
             }
         }
-
-        table = std::move(newTable);
+        table = std::move(newTable);  // Update table to new resized table
         capacity = newCapacity;
     }
 
-    // Helper function to rehash a key into the new table
+    // Helper function to rehash a key into the new table during resizing
     void rehash(std::vector<int>& newTable, int key, int newCapacity) {
         int index = key % newCapacity;
         int i = 1;
@@ -60,27 +58,9 @@ private:
 public:
     // Constructor to initialize the hash table with a given size
     HashTable(int size) {
-        capacity = nextPrime(size);
-        table.resize(capacity, -1);
+        capacity = nextPrime(size);  // Ensure initial size is prime
+        table.resize(capacity, -1);  // Initialize with -1 indicating empty slots
         currentSize = 0;
-    }
-
-    // Move constructor
-    HashTable(HashTable&& other) noexcept 
-        : table(std::move(other.table)),
-          currentSize(other.currentSize),
-          capacity(other.capacity),
-          loadFactorThreshold(other.loadFactorThreshold) {}
-
-    // Move assignment operator
-    HashTable& operator=(HashTable&& other) noexcept {
-        if (this != &other) {
-            table = std::move(other.table);
-            currentSize = other.currentSize;
-            capacity = other.capacity;
-            loadFactorThreshold = other.loadFactorThreshold;
-        }
-        return *this;
     }
 
     // Insert a key into the hash table
@@ -90,12 +70,12 @@ public:
             return;
         }
         if ((double)currentSize / capacity >= loadFactorThreshold) {
-            resize();
+            resize();  // Resize if load factor exceeds threshold
         }
 
-        int index = hash(key);
+        int index = hash(key);  // Get the initial hash index
         int i = 1;
-        while (table[index] != -1) {
+        while (table[index] != -1) {  // Quadratic probing to handle collisions
             index = (index + i * i) % capacity;
             if (i > capacity) {
                 std::cout << "Max probing limit reached!" << std::endl;
@@ -114,6 +94,7 @@ public:
         while (table[index] != -1) {
             if (table[index] == key) return index;
             index = (index + i * i) % capacity;
+            if (i > capacity) break;
             ++i;
         }
         return -1;
@@ -126,7 +107,7 @@ public:
             std::cout << "Element not found" << std::endl;
             return;
         }
-        table[index] = -1;
+        table[index] = -1;  // Mark the slot as empty
         --currentSize;
     }
 
